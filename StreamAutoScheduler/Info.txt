@@ -1,0 +1,65 @@
+﻿Here is how I managed to make it work:
+
+Create a App - Google Developer Console
+Enable the API on your App - Youtube Data API v3
+Create a OAuth Client ID - Create OAuth Credential
+The application type must be setted to Others
+Copy your Client Id and your Client Secret to a safe location.
+Access the following URL (you should be logged with the Google Account that will broadcast the live stream):
+https://accounts.google.com/o/oauth2/auth?client_id=CLIENT_ID&scope=https://gdata.youtube.com&response_type=code&access_type=offline&redirect_uri=urn:ietf:wg:oauth:2.0:oob
+
+Change the CLIENT_ID with your client id generated at step 3
+
+Copy the generated token from the input text box on the page.
+Using some tool (cURL, wget, Postman plugin for Google Chrome, whatever...) make a POST request to the following URL:
+
+https://accounts.google.com/o/oauth2/token
+
+Make a HTTP POST x-www-form-urlencoded to this url with the following fields: (Change only client_id, client_token and code, the 2 first leave as it).
+
+{
+    grant_type=authorization_code,
+    redirect_uri=urn:ietf:wg:oauth2.0:oob,
+    code=token_from_step_6_&_7
+    client_id=your_client_id,
+    client_secret=your_client_secret,
+}
+If all looks good until here, you should get a response like this one:
+
+{
+"access_token" : "token valid for next few minutes. WE DON'T WANT THIS ONE",
+"token_type" : "Bearer",
+"expires_in" : 3600,
+"refresh_token" : "token valid for offline app. COPY THIS ONE, AND STORE IT"
+}
+Now, that we have all the authentication data needed (client_id, client_secret, refresh_token), it's time to play with the API.
+    public String CreateLiveBroadcastEvent(String eventTitle, DateTime eventStartDate)
+   {
+        ClientSecrets secrets = new ClientSecrets()
+        {
+            ClientId = CLIENT_ID,
+            ClientSecret = CLIENT_SECRET
+        };
+        var token = new TokenResponse { RefreshToken = REFRESH_TOKEN };
+        var credentials = new UserCredential(new GoogleAuthorizationCodeFlow(
+        new GoogleAuthorizationCodeFlow.Initializer { ClientSecrets = secrets }),
+        "user", token);
+        var service = new YouTubeService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credentials,
+            ApplicationName = "your-app-name"
+        });
+        var broadcast = new LiveBroadcast
+        {
+            Kind = "youtube#liveBroadcast",
+            Snippet = new LiveBroadcastSnippet
+            {
+                Title = eventTitle,
+                ScheduledStartTime = eventStartDate
+            },
+            Status = new LiveBroadcastStatus { PrivacyStatus = "public" }
+        };
+        var request = service.LiveBroadcasts.Insert(broadcast, "id,snippet,status");
+        var response = request.Execute();
+        return response.Id;
+    }
